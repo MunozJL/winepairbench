@@ -1,44 +1,78 @@
-"""Run WinePairBench evaluation: GPT-4o and Qwen-Max on hallucination resistance."""
+"""WinePairBench: 5-model hallucination resistance eval."""
 import os
 from openai import OpenAI
 from langsmith import Client, evaluate
 
 client = Client()
 
-# Model clients
 gpt_client = OpenAI()
-qwen_client = OpenAI(
+openrouter_client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
     api_key=os.environ["OPENROUTER_API_KEY"]
 )
 
 SYSTEM_PROMPT = "You are a knowledgeable wine expert and sommelier. Answer wine questions accurately. If you are unsure about a producer, vintage, or fact, say so rather than guessing."
 
-def run_gpt4o(inputs: dict) -> dict:
+def run_gpt52(inputs: dict) -> dict:
     r = gpt_client.chat.completions.create(
-        model="gpt-4o",
+        model="gpt-5.2",
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": inputs["question"]}
         ],
         temperature=0.3,
-        max_tokens=500
+        max_completion_tokens=500
     )
     return {"output": r.choices[0].message.content}
 
 def run_qwen(inputs: dict) -> dict:
-    r = qwen_client.chat.completions.create(
+    r = openrouter_client.chat.completions.create(
         model="qwen/qwen-max",
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": inputs["question"]}
         ],
         temperature=0.3,
-        max_tokens=500
+        max_completion_tokens=500
     )
     return {"output": r.choices[0].message.content}
 
-# Hallucination judge
+def run_gemini(inputs: dict) -> dict:
+    r = openrouter_client.chat.completions.create(
+        model="google/gemini-2.0-flash-001",
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": inputs["question"]}
+        ],
+        temperature=0.3,
+        max_completion_tokens=500
+    )
+    return {"output": r.choices[0].message.content}
+
+def run_llama(inputs: dict) -> dict:
+    r = openrouter_client.chat.completions.create(
+        model="meta-llama/llama-3.3-70b-instruct",
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": inputs["question"]}
+        ],
+        temperature=0.3,
+        max_completion_tokens=500
+    )
+    return {"output": r.choices[0].message.content}
+
+def run_mistral(inputs: dict) -> dict:
+    r = openrouter_client.chat.completions.create(
+        model="mistralai/mistral-large-2411",
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": inputs["question"]}
+        ],
+        temperature=0.3,
+        max_completion_tokens=500
+    )
+    return {"output": r.choices[0].message.content}
+
 def hallucination_judge(run, example) -> dict:
     question = example.inputs["question"]
     model_answer = run.outputs["output"]
@@ -70,10 +104,10 @@ FAILURE_MODE: [category]
 REASON: [one sentence explanation]"""
 
     r = gpt_client.chat.completions.create(
-        model="gpt-4o",
+        model="gpt-5.2",
         messages=[{"role": "user", "content": judge_prompt}],
         temperature=0,
-        max_tokens=150
+        max_completion_tokens=150
     )
     judge_text = r.choices[0].message.content
 
@@ -96,12 +130,12 @@ REASON: [one sentence explanation]"""
         "comment": f"{failure} | {reason}"
     }
 
-print("=== Running GPT-4o evaluation ===")
+print("=== Running GPT-5.2 evaluation ===")
 results_gpt = evaluate(
-    run_gpt4o,
+    run_gpt52,
     data="winepairbench-v0",
     evaluators=[hallucination_judge],
-    experiment_prefix="gpt4o-hr-v0"
+    experiment_prefix="gpt52-hr-v1"
 )
 
 print("\n=== Running Qwen-Max evaluation ===")
@@ -109,7 +143,31 @@ results_qwen = evaluate(
     run_qwen,
     data="winepairbench-v0",
     evaluators=[hallucination_judge],
-    experiment_prefix="qwen-max-hr-v0"
+    experiment_prefix="qwen-max-hr-v1"
+)
+
+print("\n=== Running Gemini evaluation ===")
+results_gemini = evaluate(
+    run_gemini,
+    data="winepairbench-v0",
+    evaluators=[hallucination_judge],
+    experiment_prefix="gemini-2flash-hr-v1"
+)
+
+print("\n=== Running Llama evaluation ===")
+results_llama = evaluate(
+    run_llama,
+    data="winepairbench-v0",
+    evaluators=[hallucination_judge],
+    experiment_prefix="llama-33-70b-hr-v1"
+)
+
+print("\n=== Running Mistral evaluation ===")
+results_mistral = evaluate(
+    run_mistral,
+    data="winepairbench-v0",
+    evaluators=[hallucination_judge],
+    experiment_prefix="mistral-large-hr-v1"
 )
 
 print("\nDone! View results at https://smith.langchain.com")
